@@ -56,11 +56,40 @@ class AudioRecorder {
     }
 
     async toggleRecording() {
-        if (!this.isRecording) {
-            await this.startRecording();
-        } else {
-            await this.stopRecording();
+        try {
+            if (!this.isRecording) {
+                if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+                    await this.stopRecording();
+                }
+                await this.startRecording();
+            } else {
+                await this.stopRecording();
+            }
+        } catch (error) {
+            console.error('Error toggling recording:', error);
+            UIkit.notification({
+                message: 'Error toggling recording. Please try again.',
+                status: 'danger'
+            });
         }
+    }
+
+    cleanupRecording() {
+        if (this.mediaRecorder) {
+            if (this.mediaRecorder.state === 'recording') {
+                this.mediaRecorder.stop();
+            }
+            if (this.mediaRecorder.stream) {
+                this.mediaRecorder.stream.getTracks().forEach(track => track.stop());
+            }
+        }
+        if (this.recognition) {
+            this.recognition.stop();
+        }
+        this.mediaRecorder = null;
+        this.audioChunks = [];
+        clearInterval(this.timer);
+        this.isRecording = false;
     }
 
     updateTimer() {
@@ -161,6 +190,8 @@ class AudioRecorder {
 
     async startRecording() {
         try {
+            this.cleanupRecording();
+
             const stream = await navigator.mediaDevices.getUserMedia({
                 audio: {
                     echoCancellation: true,
@@ -205,6 +236,7 @@ class AudioRecorder {
             this.timer = setInterval(() => this.updateTimer(), 1000);
         } catch (error) {
             console.error('Error accessing microphone:', error);
+            this.cleanupRecording();
             UIkit.notification({
                 message: 'Error accessing microphone. Please ensure you have granted permission.',
                 status: 'danger'
@@ -214,7 +246,7 @@ class AudioRecorder {
 
     async stopRecording() {
         return new Promise(async (resolve) => {
-            if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+            if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
                 this.mediaRecorder.onstop = async () => {
                     clearInterval(this.timer);
                     if (this.timerDisplay) {
@@ -241,14 +273,13 @@ class AudioRecorder {
                         this.recordBtn.classList.add('uk-button-danger');
                     }
                     
+                    this.cleanupRecording();
                     resolve();
                 };
 
-                this.recognition.stop();
                 this.mediaRecorder.stop();
-                this.isRecording = false;
-                this.mediaRecorder.stream.getTracks().forEach(track => track.stop());
             } else {
+                this.cleanupRecording();
                 resolve();
             }
         });
