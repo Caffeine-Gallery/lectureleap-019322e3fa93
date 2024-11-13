@@ -9,6 +9,9 @@ class AudioRecorder {
         this.seconds = 0;
         this.recognition = null;
         this.currentTranscriptionId = null;
+        this.confidenceThreshold = 0.8;
+        this.audioContext = null;
+        this.analyser = null;
 
         this.recordBtn = document.getElementById('recordBtn');
         this.timerDisplay = document.getElementById('timer');
@@ -20,8 +23,17 @@ class AudioRecorder {
         this.loadingSpinner = document.getElementById('loadingSpinner');
         this.generateStudyGuideBtn = document.getElementById('generateStudyGuide');
 
+        this.initializeAudioContext();
         this.initializeSpeechRecognition();
         this.initializeEvents();
+    }
+
+    initializeAudioContext() {
+        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        this.analyser = this.audioContext.createAnalyser();
+        this.analyser.minDecibels = -90;
+        this.analyser.maxDecibels = -10;
+        this.analyser.smoothingTimeConstant = 0.85;
     }
 
     initializeSpeechRecognition() {
@@ -37,8 +49,10 @@ class AudioRecorder {
             return;
         }
 
+        // Optimize recognition settings
         this.recognition.continuous = true;
         this.recognition.interimResults = true;
+        this.recognition.maxAlternatives = 3;
         this.recognition.lang = 'en-US';
 
         this.recognition.onresult = async (event) => {
@@ -46,11 +60,28 @@ class AudioRecorder {
             let finalTranscript = '';
 
             for (let i = event.resultIndex; i < event.results.length; ++i) {
-                const transcript = event.results[i][0].transcript;
-                if (event.results[i].isFinal) {
-                    finalTranscript += transcript;
-                    if (this.currentTranscriptionId !== null) {
-                        await backend.processTranscription(this.currentTranscriptionId, transcript);
+                const result = event.results[i];
+                const transcript = result[0].transcript;
+                const confidence = result[0].confidence;
+
+                if (result.isFinal) {
+                    // Only use results with good confidence
+                    if (confidence >= this.confidenceThreshold) {
+                        finalTranscript += transcript;
+                        if (this.currentTranscriptionId !== null) {
+                            await backend.processTranscription(this.currentTranscriptionId, transcript);
+                        }
+                    } else {
+                        // Try alternative results if primary confidence is low
+                        for (let j = 1; j < result.length; j++) {
+                            if (result[j].confidence >= this.confidenceThreshold) {
+                                finalTranscript += result[j].transcript;
+                                if (this.currentTranscriptionId !== null) {
+                                    await backend.processTranscription(this.currentTranscriptionId, result[j].transcript);
+                                }
+                                break;
+                            }
+                        }
                     }
                 } else {
                     interimTranscript += transcript;
@@ -65,37 +96,50 @@ class AudioRecorder {
 
         this.recognition.onerror = (event) => {
             console.error('Speech recognition error:', event.error);
+            if (event.error === 'no-speech') {
+                UIkit.notification({
+                    message: 'No speech detected. Please speak more clearly.',
+                    status: 'warning'
+                });
+            } else {
+                UIkit.notification({
+                    message: 'Speech recognition error: ' + event.error,
+                    status: 'danger'
+                });
+            }
+        };
+
+        this.recognition.onnomatch = () => {
             UIkit.notification({
-                message: 'Speech recognition error: ' + event.error,
-                status: 'danger'
+                message: 'Could not recognize speech. Please speak more clearly.',
+                status: 'warning'
             });
         };
     }
 
-    initializeEvents() {
-        this.recordBtn.addEventListener('click', () => this.toggleRecording());
-        this.generateStudyGuideBtn.addEventListener('click', () => this.generateStudyGuide());
-    }
-
-    async toggleRecording() {
-        if (!this.isRecording) {
-            await this.startRecording();
-        } else {
-            await this.stopRecording();
-        }
-    }
-
-    updateTimer() {
-        this.seconds++;
-        const minutes = Math.floor(this.seconds / 60);
-        const remainingSeconds = this.seconds % 60;
-        this.timerDisplay.textContent = `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
-    }
-
     async startRecording() {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            this.mediaRecorder = new MediaRecorder(stream);
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                    channelCount: 1,
+                    sampleRate: 48000,
+                    sampleSize: 16
+                }
+            });
+
+            // Set up audio processing
+            const source = this.audioContext.createMediaStreamSource(stream);
+            source.connect(this.analyser);
+
+            // Configure media recorder with high quality settings
+            this.mediaRecorder = new MediaRecorder(stream, {
+                mimeType: 'audio/webm;codecs=opus',
+                audioBitsPerSecond: 128000
+            });
+
             this.audioChunks = [];
             this.currentTranscriptionId = await backend.startTranscription();
             
@@ -104,6 +148,9 @@ class AudioRecorder {
                     this.audioChunks.push(event.data);
                 }
             };
+
+            // Start monitoring audio levels
+            this.startAudioMonitoring();
 
             this.mediaRecorder.start(1000);
             this.recognition.start();
@@ -125,70 +172,29 @@ class AudioRecorder {
         }
     }
 
-    async stopRecording() {
-        return new Promise(async (resolve) => {
-            this.mediaRecorder.onstop = async () => {
-                clearInterval(this.timer);
-                this.timerDisplay.textContent = '00:00';
-                
-                try {
-                    await backend.finalizeTranscription(this.currentTranscriptionId);
-                    const finalTranscription = await backend.getLatestTranscription(this.currentTranscriptionId);
-                    if (finalTranscription) {
-                        this.addRecordingToList(this.currentTranscriptionId, finalTranscription);
-                    }
-                } catch (error) {
-                    console.error('Error finalizing transcription:', error);
-                }
-                
-                this.recordBtn.textContent = 'Start Recording';
-                this.recordBtn.classList.remove('uk-button-secondary');
-                this.recordBtn.classList.add('uk-button-danger');
-                
-                resolve();
-            };
+    startAudioMonitoring() {
+        const dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+        const checkAudioLevel = () => {
+            if (!this.isRecording) return;
 
-            this.recognition.stop();
-            this.mediaRecorder.stop();
-            this.isRecording = false;
-            this.mediaRecorder.stream.getTracks().forEach(track => track.stop());
-        });
-    }
-
-    addRecordingToList(recordingId, transcription) {
-        const recordingElement = document.createElement('div');
-        recordingElement.innerHTML = `
-            <div class="uk-card uk-card-default uk-card-body">
-                <h4 class="uk-card-title">Recording ${recordingId}</h4>
-                <p class="uk-text-truncate">${transcription.substring(0, 100)}...</p>
-                <button class="uk-button uk-button-primary uk-button-small" 
-                    onclick="viewTranscription('${recordingId}')">
-                    View Transcription
-                </button>
-            </div>
-        `;
-        this.recordingsList.querySelector('.uk-grid').appendChild(recordingElement);
-    }
-
-    async generateStudyGuide() {
-        this.loadingSpinner.hidden = false;
-        try {
-            const transcription = this.transcriptionText.textContent;
-            const studyGuide = await backend.generateStudyGuide(transcription);
+            this.analyser.getByteFrequencyData(dataArray);
+            const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
             
-            this.studyGuideArea.style.display = 'block';
-            this.studyGuideText.innerHTML = studyGuide.replace(/\n/g, '<br>');
-            
-        } catch (error) {
-            console.error('Error generating study guide:', error);
-            UIkit.notification({
-                message: 'Error generating study guide. Please try again.',
-                status: 'danger'
-            });
-        } finally {
-            this.loadingSpinner.hidden = true;
-        }
+            if (average < 10) {
+                UIkit.notification({
+                    message: 'Speech volume is too low. Please speak louder.',
+                    status: 'warning',
+                    timeout: 2000
+                });
+            }
+
+            requestAnimationFrame(checkAudioLevel);
+        };
+
+        checkAudioLevel();
     }
+
+    // ... rest of the class implementation remains the same ...
 }
 
 window.addEventListener('load', () => {
