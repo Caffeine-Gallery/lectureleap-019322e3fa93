@@ -13,7 +13,6 @@ import Time "mo:base/Time";
 import Int "mo:base/Int";
 
 actor {
-    // Stable type for storing session data
     type StableSession = {
         id: Nat;
         audioChunks: [[Nat8]];
@@ -21,7 +20,6 @@ actor {
         timestamp: Int;
     };
 
-    // Runtime type with Buffer for efficient append operations
     type TranscriptionSession = {
         id: Nat;
         audioChunks: Buffer.Buffer<[Nat8]>;
@@ -33,7 +31,6 @@ actor {
     private stable var stableSessionsEntries: [(Nat, StableSession)] = [];
     private var sessions = HashMap.HashMap<Nat, TranscriptionSession>(0, Nat.equal, Hash.hash);
 
-    // Convert from runtime to stable type
     private func toStableSession(session: TranscriptionSession) : StableSession {
         {
             id = session.id;
@@ -43,7 +40,6 @@ actor {
         }
     };
 
-    // Convert from stable to runtime type
     private func toRuntimeSession(session: StableSession) : TranscriptionSession {
         let buffer = Buffer.Buffer<[Nat8]>(session.audioChunks.size());
         for (chunk in session.audioChunks.vals()) {
@@ -83,7 +79,6 @@ actor {
         );
     };
 
-    // Start a new transcription session
     public shared func startTranscription() : async Nat {
         let sessionId = nextId;
         nextId += 1;
@@ -99,21 +94,16 @@ actor {
         sessionId
     };
 
-    // Process an audio chunk and update transcription
-    public shared func processAudioChunk(sessionId: Nat, audioChunk: [Nat8]) : async Bool {
+    public shared func processTranscription(sessionId: Nat, transcription: Text) : async Bool {
         switch (sessions.get(sessionId)) {
             case (null) {
                 return false;
             };
             case (?session) {
-                session.audioChunks.add(audioChunk);
-                
-                // Process the audio chunk and update transcription
-                let newWords = processAudioToText(audioChunk);
                 let updatedSession : TranscriptionSession = {
                     id = session.id;
                     audioChunks = session.audioChunks;
-                    currentTranscription = session.currentTranscription # " " # newWords;
+                    currentTranscription = session.currentTranscription # " " # transcription;
                     timestamp = Time.now();
                 };
                 
@@ -123,7 +113,6 @@ actor {
         };
     };
 
-    // Get the latest transcription for a session
     public query func getLatestTranscription(sessionId: Nat) : async ?Text {
         switch (sessions.get(sessionId)) {
             case (null) { null };
@@ -131,28 +120,17 @@ actor {
         };
     };
 
-    // Finalize the transcription session
     public shared func finalizeTranscription(sessionId: Nat) : async Bool {
         switch (sessions.get(sessionId)) {
             case (null) { false };
             case (?session) {
-                // In a production environment, this would perform final processing
-                // and cleanup of the transcription
                 true
             };
         };
     };
 
-    // Helper function to simulate processing audio to text
-    private func processAudioToText(audioChunk: [Nat8]) : Text {
-        let words = ["the", "quick", "brown", "fox", "jumps", "over", "lazy", "dog"];
-        let randomIndex = Int.abs(Time.now() % 8);
-        return words[randomIndex];
-    };
-
-    // Generate a study guide from transcription
     public shared func generateStudyGuide(transcription: Text) : async Text {
-        // In a production environment, this would integrate with an AI service
+        // Note: In a production environment, this would integrate with an AI service
         return "Study Guide:\n\n" #
                "1. Key Points:\n" #
                "   - " # transcription # "\n\n" #

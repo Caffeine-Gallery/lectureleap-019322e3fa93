@@ -6,7 +6,7 @@ export interface _SERVICE {
   'finalizeTranscription' : ActorMethod<[bigint], boolean>,
   'generateStudyGuide' : ActorMethod<[string], string>,
   'getLatestTranscription' : ActorMethod<[bigint], [] | [string]>,
-  'processAudioChunk' : ActorMethod<[bigint, Uint8Array | number[]], boolean>,
+  'processTranscription' : ActorMethod<[bigint, string], boolean>,
   'startTranscription' : ActorMethod<[], bigint>,
 }
 export declare const idlFactory: IDL.InterfaceFactory;

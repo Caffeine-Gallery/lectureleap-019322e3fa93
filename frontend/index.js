@@ -7,6 +7,7 @@ class AudioRecorder {
         this.isRecording = false;
         this.timer = null;
         this.seconds = 0;
+        this.recognition = null;
         this.currentTranscriptionId = null;
 
         this.recordBtn = document.getElementById('recordBtn');
@@ -19,7 +20,56 @@ class AudioRecorder {
         this.loadingSpinner = document.getElementById('loadingSpinner');
         this.generateStudyGuideBtn = document.getElementById('generateStudyGuide');
 
+        this.initializeSpeechRecognition();
         this.initializeEvents();
+    }
+
+    initializeSpeechRecognition() {
+        if ('webkitSpeechRecognition' in window) {
+            this.recognition = new webkitSpeechRecognition();
+        } else if ('SpeechRecognition' in window) {
+            this.recognition = new SpeechRecognition();
+        } else {
+            UIkit.notification({
+                message: 'Speech recognition is not supported in this browser.',
+                status: 'danger'
+            });
+            return;
+        }
+
+        this.recognition.continuous = true;
+        this.recognition.interimResults = true;
+        this.recognition.lang = 'en-US';
+
+        this.recognition.onresult = async (event) => {
+            let interimTranscript = '';
+            let finalTranscript = '';
+
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                const transcript = event.results[i][0].transcript;
+                if (event.results[i].isFinal) {
+                    finalTranscript += transcript;
+                    if (this.currentTranscriptionId !== null) {
+                        await backend.processTranscription(this.currentTranscriptionId, transcript);
+                    }
+                } else {
+                    interimTranscript += transcript;
+                }
+            }
+
+            this.transcriptionText.innerHTML = 
+                finalTranscript +
+                '<span style="color: #666;">' + interimTranscript + '</span>';
+            this.transcriptionText.scrollTop = this.transcriptionText.scrollHeight;
+        };
+
+        this.recognition.onerror = (event) => {
+            console.error('Speech recognition error:', event.error);
+            UIkit.notification({
+                message: 'Speech recognition error: ' + event.error,
+                status: 'danger'
+            });
+        };
     }
 
     initializeEvents() {
@@ -45,40 +95,21 @@ class AudioRecorder {
     async startRecording() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            this.mediaRecorder = new MediaRecorder(stream, {
-                mimeType: 'audio/webm;codecs=opus',
-                audioBitsPerSecond: 16000
-            });
-            
-            // Start a new transcription session
+            this.mediaRecorder = new MediaRecorder(stream);
+            this.audioChunks = [];
             this.currentTranscriptionId = await backend.startTranscription();
-            this.transcriptionArea.style.display = 'block';
-            this.transcriptionText.textContent = '';
-
-            this.mediaRecorder.ondataavailable = async (event) => {
+            
+            this.mediaRecorder.ondataavailable = (event) => {
                 if (event.data.size > 0) {
-                    const arrayBuffer = await event.data.arrayBuffer();
-                    const uint8Array = new Uint8Array(arrayBuffer);
-                    
-                    try {
-                        // Send audio chunk for processing
-                        await backend.processAudioChunk(this.currentTranscriptionId, Array.from(uint8Array));
-                        
-                        // Get latest transcription
-                        const transcription = await backend.getLatestTranscription(this.currentTranscriptionId);
-                        if (transcription) {
-                            this.transcriptionText.textContent = transcription;
-                            this.transcriptionText.scrollTop = this.transcriptionText.scrollHeight;
-                        }
-                    } catch (error) {
-                        console.error('Error processing audio chunk:', error);
-                    }
+                    this.audioChunks.push(event.data);
                 }
             };
 
-            // Request data every 1 second
             this.mediaRecorder.start(1000);
+            this.recognition.start();
+            
             this.isRecording = true;
+            this.transcriptionArea.style.display = 'block';
             this.recordBtn.textContent = 'Stop Recording';
             this.recordBtn.classList.remove('uk-button-danger');
             this.recordBtn.classList.add('uk-button-secondary');
@@ -101,13 +132,11 @@ class AudioRecorder {
                 this.timerDisplay.textContent = '00:00';
                 
                 try {
-                    // Finalize the transcription
                     await backend.finalizeTranscription(this.currentTranscriptionId);
-                    
-                    // Get final transcription
                     const finalTranscription = await backend.getLatestTranscription(this.currentTranscriptionId);
-                    this.addRecordingToList(this.currentTranscriptionId, finalTranscription);
-                    
+                    if (finalTranscription) {
+                        this.addRecordingToList(this.currentTranscriptionId, finalTranscription);
+                    }
                 } catch (error) {
                     console.error('Error finalizing transcription:', error);
                 }
@@ -119,6 +148,7 @@ class AudioRecorder {
                 resolve();
             };
 
+            this.recognition.stop();
             this.mediaRecorder.stop();
             this.isRecording = false;
             this.mediaRecorder.stream.getTracks().forEach(track => track.stop());

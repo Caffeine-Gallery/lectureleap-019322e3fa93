@@ -2,6 +2,6 @@ service : {
   finalizeTranscription: (nat) -> (bool);
   generateStudyGuide: (text) -> (text);
   getLatestTranscription: (nat) -> (opt text) query;
-  processAudioChunk: (nat, vec nat8) -> (bool);
+  processTranscription: (nat, text) -> (bool);
   startTranscription: () -> (nat);
 }

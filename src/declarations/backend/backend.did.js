@@ -7,11 +7,7 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Opt(IDL.Text)],
         ['query'],
       ),
-    'processAudioChunk' : IDL.Func(
-        [IDL.Nat, IDL.Vec(IDL.Nat8)],
-        [IDL.Bool],
-        [],
-      ),
+    'processTranscription' : IDL.Func([IDL.Nat, IDL.Text], [IDL.Bool], []),
     'startTranscription' : IDL.Func([], [IDL.Nat], []),
   });
 };
