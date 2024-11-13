@@ -29,12 +29,45 @@ class AudioRecorder {
         this.initializeEvents();
     }
 
+    initializeAudioContext() {
+        try {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            this.analyser = this.audioContext.createAnalyser();
+            this.analyser.minDecibels = -90;
+            this.analyser.maxDecibels = -10;
+            this.analyser.smoothingTimeConstant = 0.85;
+        } catch (error) {
+            console.error('Error initializing audio context:', error);
+            UIkit.notification({
+                message: 'Error initializing audio system. Please try again.',
+                status: 'danger'
+            });
+        }
+    }
+
     initializeEvents() {
         if (this.recordBtn) {
             this.recordBtn.addEventListener('click', () => this.toggleRecording());
         }
         if (this.generateStudyGuideBtn) {
             this.generateStudyGuideBtn.addEventListener('click', () => this.generateStudyGuide());
+        }
+    }
+
+    async toggleRecording() {
+        if (!this.isRecording) {
+            await this.startRecording();
+        } else {
+            await this.stopRecording();
+        }
+    }
+
+    updateTimer() {
+        this.seconds++;
+        const minutes = Math.floor(this.seconds / 60);
+        const remainingSeconds = this.seconds % 60;
+        if (this.timerDisplay) {
+            this.timerDisplay.textContent = `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
         }
     }
 
@@ -103,7 +136,27 @@ class AudioRecorder {
         };
     }
 
-    // ... rest of the methods remain the same ...
+    startAudioMonitoring() {
+        const dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+        const checkAudioLevel = () => {
+            if (!this.isRecording) return;
+
+            this.analyser.getByteFrequencyData(dataArray);
+            const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+            
+            if (average < 10) {
+                UIkit.notification({
+                    message: 'Speech volume is too low. Please speak louder.',
+                    status: 'warning',
+                    timeout: 2000
+                });
+            }
+
+            requestAnimationFrame(checkAudioLevel);
+        };
+
+        checkAudioLevel();
+    }
 
     async startRecording() {
         try {
@@ -196,7 +249,47 @@ class AudioRecorder {
         });
     }
 
-    // ... remaining methods stay the same ...
+    addRecordingToList(recordingId, transcription) {
+        if (!this.recordingsList) return;
+
+        const recordingElement = document.createElement('div');
+        recordingElement.innerHTML = `
+            <div class="uk-card uk-card-default uk-card-body">
+                <h4 class="uk-card-title">Recording ${recordingId}</h4>
+                <p class="uk-text-truncate">${transcription.substring(0, 100)}...</p>
+                <button class="uk-button uk-button-primary uk-button-small" 
+                    onclick="viewTranscription('${recordingId}')">
+                    View Transcription
+                </button>
+            </div>
+        `;
+        const grid = this.recordingsList.querySelector('.uk-grid');
+        if (grid) {
+            grid.appendChild(recordingElement);
+        }
+    }
+
+    async generateStudyGuide() {
+        if (!this.loadingSpinner || !this.transcriptionText || !this.studyGuideArea || !this.studyGuideText) return;
+
+        this.loadingSpinner.hidden = false;
+        try {
+            const transcription = this.transcriptionText.textContent;
+            const studyGuide = await backend.generateStudyGuide(transcription);
+            
+            this.studyGuideArea.style.display = 'block';
+            this.studyGuideText.innerHTML = studyGuide.replace(/\n/g, '<br>');
+            
+        } catch (error) {
+            console.error('Error generating study guide:', error);
+            UIkit.notification({
+                message: 'Error generating study guide. Please try again.',
+                status: 'danger'
+            });
+        } finally {
+            this.loadingSpinner.hidden = true;
+        }
+    }
 }
 
 window.addEventListener('load', () => {
