@@ -1,7 +1,7 @@
 service : {
   finalizeTranscription: (nat) -> (bool);
   generateStudyGuide: (text) -> (text);
-  getLatestTranscription: (nat) -> (opt text) query;
+  getLatestTranscription: (nat) -> (text) query;
   processTranscription: (nat, text) -> (bool);
   startTranscription: () -> (nat);
 }
