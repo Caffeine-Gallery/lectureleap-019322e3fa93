@@ -1,18 +1,18 @@
 export const idlFactory = ({ IDL }) => {
-  const Recording = IDL.Record({
-    'id' : IDL.Nat,
-    'audio' : IDL.Vec(IDL.Nat8),
-    'transcription' : IDL.Opt(IDL.Text),
-  });
   return IDL.Service({
+    'finalizeTranscription' : IDL.Func([IDL.Nat], [IDL.Bool], []),
     'generateStudyGuide' : IDL.Func([IDL.Text], [IDL.Text], []),
-    'getAllRecordings' : IDL.Func(
-        [],
-        [IDL.Vec(IDL.Tuple(IDL.Nat, Recording))],
+    'getLatestTranscription' : IDL.Func(
+        [IDL.Nat],
+        [IDL.Opt(IDL.Text)],
         ['query'],
       ),
-    'storeRecording' : IDL.Func([IDL.Vec(IDL.Nat8)], [IDL.Nat], []),
-    'transcribeRecording' : IDL.Func([IDL.Nat], [IDL.Text], []),
+    'processAudioChunk' : IDL.Func(
+        [IDL.Nat, IDL.Vec(IDL.Nat8)],
+        [IDL.Bool],
+        [],
+      ),
+    'startTranscription' : IDL.Func([], [IDL.Nat], []),
   });
 };
 export const init = ({ IDL }) => { return []; };

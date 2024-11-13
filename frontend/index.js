@@ -7,6 +7,7 @@ class AudioRecorder {
         this.isRecording = false;
         this.timer = null;
         this.seconds = 0;
+        this.currentTranscriptionId = null;
 
         this.recordBtn = document.getElementById('recordBtn');
         this.timerDisplay = document.getElementById('timer');
@@ -44,14 +45,39 @@ class AudioRecorder {
     async startRecording() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            this.mediaRecorder = new MediaRecorder(stream);
-            this.audioChunks = [];
+            this.mediaRecorder = new MediaRecorder(stream, {
+                mimeType: 'audio/webm;codecs=opus',
+                audioBitsPerSecond: 16000
+            });
+            
+            // Start a new transcription session
+            this.currentTranscriptionId = await backend.startTranscription();
+            this.transcriptionArea.style.display = 'block';
+            this.transcriptionText.textContent = '';
 
-            this.mediaRecorder.ondataavailable = (event) => {
-                this.audioChunks.push(event.data);
+            this.mediaRecorder.ondataavailable = async (event) => {
+                if (event.data.size > 0) {
+                    const arrayBuffer = await event.data.arrayBuffer();
+                    const uint8Array = new Uint8Array(arrayBuffer);
+                    
+                    try {
+                        // Send audio chunk for processing
+                        await backend.processAudioChunk(this.currentTranscriptionId, Array.from(uint8Array));
+                        
+                        // Get latest transcription
+                        const transcription = await backend.getLatestTranscription(this.currentTranscriptionId);
+                        if (transcription) {
+                            this.transcriptionText.textContent = transcription;
+                            this.transcriptionText.scrollTop = this.transcriptionText.scrollHeight;
+                        }
+                    } catch (error) {
+                        console.error('Error processing audio chunk:', error);
+                    }
+                }
             };
 
-            this.mediaRecorder.start();
+            // Request data every 1 second
+            this.mediaRecorder.start(1000);
             this.isRecording = true;
             this.recordBtn.textContent = 'Stop Recording';
             this.recordBtn.classList.remove('uk-button-danger');
@@ -69,13 +95,22 @@ class AudioRecorder {
     }
 
     async stopRecording() {
-        return new Promise(resolve => {
+        return new Promise(async (resolve) => {
             this.mediaRecorder.onstop = async () => {
                 clearInterval(this.timer);
                 this.timerDisplay.textContent = '00:00';
                 
-                const audioBlob = new Blob(this.audioChunks, { type: 'audio/wav' });
-                await this.processRecording(audioBlob);
+                try {
+                    // Finalize the transcription
+                    await backend.finalizeTranscription(this.currentTranscriptionId);
+                    
+                    // Get final transcription
+                    const finalTranscription = await backend.getLatestTranscription(this.currentTranscriptionId);
+                    this.addRecordingToList(this.currentTranscriptionId, finalTranscription);
+                    
+                } catch (error) {
+                    console.error('Error finalizing transcription:', error);
+                }
                 
                 this.recordBtn.textContent = 'Start Recording';
                 this.recordBtn.classList.remove('uk-button-secondary');
@@ -88,37 +123,6 @@ class AudioRecorder {
             this.isRecording = false;
             this.mediaRecorder.stream.getTracks().forEach(track => track.stop());
         });
-    }
-
-    async processRecording(audioBlob) {
-        this.loadingSpinner.hidden = false;
-        try {
-            // Convert blob to array buffer
-            const arrayBuffer = await audioBlob.arrayBuffer();
-            const uint8Array = new Uint8Array(arrayBuffer);
-            
-            // Store recording in backend
-            const recordingId = await backend.storeRecording(Array.from(uint8Array));
-            
-            // Get transcription
-            const transcription = await backend.transcribeRecording(recordingId);
-            
-            // Display transcription
-            this.transcriptionArea.style.display = 'block';
-            this.transcriptionText.textContent = transcription;
-            
-            // Add recording to list
-            this.addRecordingToList(recordingId, transcription);
-            
-        } catch (error) {
-            console.error('Error processing recording:', error);
-            UIkit.notification({
-                message: 'Error processing recording. Please try again.',
-                status: 'danger'
-            });
-        } finally {
-            this.loadingSpinner.hidden = true;
-        }
     }
 
     addRecordingToList(recordingId, transcription) {
@@ -157,7 +161,6 @@ class AudioRecorder {
     }
 }
 
-// Initialize the recorder when the page loads
 window.addEventListener('load', () => {
     new AudioRecorder();
 });
