@@ -1,58 +1,42 @@
-body {
-    background-color: #f8f9fa;
+.transcript-container {
+    height: 300px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-size: 16px;
+    line-height: 1.5;
+    border: 1px solid #e5e5e5;
 }
 
-#timer {
-    font-family: monospace;
-    font-size: 2.5rem;
-    color: #333;
-    margin: 20px 0;
+.transcript-container::-webkit-scrollbar {
+    width: 8px;
 }
 
-#recordBtn {
-    padding: 15px 30px;
-    font-size: 1.2rem;
+.transcript-container::-webkit-scrollbar-track {
+    background: #f1f1f1;
 }
 
-.uk-card {
-    border-radius: 15px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+.transcript-container::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
 }
 
-#loadingSpinner {
-    background: rgba(255, 255, 255, 0.8);
-    z-index: 1000;
+.transcript-container::-webkit-scrollbar-thumb:hover {
+    background: #555;
 }
 
-#transcriptionText, #studyGuideText {
-    padding: 20px;
-    background: #f8f9fa;
-    border-radius: 10px;
-    line-height: 1.6;
+#transcriptionArea, #studyGuideArea {
+    opacity: 1;
+    transition: opacity 0.3s ease;
 }
 
-.uk-button-danger {
-    background-color: #ff4444;
+.interim-text {
+    color: #666;
+    font-style: italic;
 }
 
-.uk-button-danger:hover {
-    background-color: #cc0000;
-}
-
-.uk-heading-medium {
-    background: linear-gradient(45deg, #2196F3, #4CAF50);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    font-weight: bold;
-}
-
-@media (max-width: 640px) {
-    #timer {
-        font-size: 2rem;
-    }
-    
-    #recordBtn {
-        padding: 10px 20px;
-        font-size: 1rem;
-    }
+.timestamp {
+    color: #999;
+    font-size: 0.8em;
+    margin-right: 8px;
 }
