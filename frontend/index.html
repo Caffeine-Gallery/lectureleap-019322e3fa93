@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LectureAI - Smart Study Assistant</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uikit@3.16.22/dist/css/uikit.min.css" />
+    <link rel="stylesheet" href="index.css">
+</head>
+<body>
+    <div class="uk-container uk-margin-top">
+        <h1 class="uk-heading-medium uk-text-center">LectureAI</h1>
+        
+        <div class="uk-card uk-card-default uk-card-body uk-margin">
+            <div id="recordingSection" class="uk-text-center">
+                <div id="timer" class="uk-text-large uk-margin">00:00</div>
+                <button id="recordBtn" class="uk-button uk-button-danger uk-border-pill">
+                    <span uk-icon="icon: microphone"></span> Start Recording
+                </button>
+            </div>
+        </div>
+
+        <div id="recordingsList" class="uk-margin">
+            <h3>Your Recordings</h3>
+            <div class="uk-child-width-1-2@m uk-grid-small uk-grid-match" uk-grid>
+                <!-- Recordings will be listed here -->
+            </div>
+        </div>
+
+        <div id="transcriptionArea" class="uk-margin uk-card uk-card-default uk-card-body" style="display: none;">
+            <h3>Transcription</h3>
+            <div id="transcriptionText" class="uk-margin"></div>
+            <button id="generateStudyGuide" class="uk-button uk-button-primary">Generate Study Guide</button>
+        </div>
+
+        <div id="studyGuideArea" class="uk-margin uk-card uk-card-default uk-card-body" style="display: none;">
+            <h3>Study Guide</h3>
+            <div id="studyGuideText" class="uk-margin"></div>
+        </div>
+    </div>
+
+    <div id="loadingSpinner" class="uk-overlay-default uk-position-cover" hidden>
+        <div class="uk-position-center">
+            <span uk-spinner="ratio: 3"></span>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/uikit@3.16.22/dist/js/uikit.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/uikit@3.16.22/dist/js/uikit-icons.min.js"></script>
+    <script type="module" src="index.js"></script>
+</body>
+</html>

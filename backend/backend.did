@@ -1,0 +1,15 @@
+type Recording = 
+ record {
+   audio: vec nat8;
+   id: nat;
+   transcription: opt text;
+ };
+service : {
+  generateStudyGuide: (text) -> (text);
+  getAllRecordings: () -> (vec record {
+                                 nat;
+                                 Recording;
+                               }) query;
+  storeRecording: (vec nat8) -> (nat);
+  transcribeRecording: (nat) -> (text);
+}

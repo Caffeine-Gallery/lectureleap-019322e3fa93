@@ -1,0 +1,58 @@
+body {
+    background-color: #f8f9fa;
+}
+
+#timer {
+    font-family: monospace;
+    font-size: 2.5rem;
+    color: #333;
+    margin: 20px 0;
+}
+
+#recordBtn {
+    padding: 15px 30px;
+    font-size: 1.2rem;
+}
+
+.uk-card {
+    border-radius: 15px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+#loadingSpinner {
+    background: rgba(255, 255, 255, 0.8);
+    z-index: 1000;
+}
+
+#transcriptionText, #studyGuideText {
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 10px;
+    line-height: 1.6;
+}
+
+.uk-button-danger {
+    background-color: #ff4444;
+}
+
+.uk-button-danger:hover {
+    background-color: #cc0000;
+}
+
+.uk-heading-medium {
+    background: linear-gradient(45deg, #2196F3, #4CAF50);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: bold;
+}
+
+@media (max-width: 640px) {
+    #timer {
+        font-size: 2rem;
+    }
+    
+    #recordBtn {
+        padding: 10px 20px;
+        font-size: 1rem;
+    }
+}
