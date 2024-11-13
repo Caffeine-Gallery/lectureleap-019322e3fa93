@@ -1,33 +1,40 @@
-.transcript-container {
+body {
+    min-height: 100vh;
+}
+
+.transcript-container, .study-guide-container {
     height: 300px;
     overflow-y: auto;
     white-space: pre-wrap;
     word-wrap: break-word;
     font-size: 16px;
-    line-height: 1.5;
+    line-height: 1.6;
+    border-radius: 8px;
     border: 1px solid #e5e5e5;
+    background-color: #fff !important;
+    padding: 20px !important;
 }
 
-.transcript-container::-webkit-scrollbar {
+.transcript-container::-webkit-scrollbar,
+.study-guide-container::-webkit-scrollbar {
     width: 8px;
 }
 
-.transcript-container::-webkit-scrollbar-track {
+.transcript-container::-webkit-scrollbar-track,
+.study-guide-container::-webkit-scrollbar-track {
     background: #f1f1f1;
+    border-radius: 4px;
 }
 
-.transcript-container::-webkit-scrollbar-thumb {
+.transcript-container::-webkit-scrollbar-thumb,
+.study-guide-container::-webkit-scrollbar-thumb {
     background: #888;
     border-radius: 4px;
 }
 
-.transcript-container::-webkit-scrollbar-thumb:hover {
+.transcript-container::-webkit-scrollbar-thumb:hover,
+.study-guide-container::-webkit-scrollbar-thumb:hover {
     background: #555;
-}
-
-#transcriptionArea, #studyGuideArea {
-    opacity: 1;
-    transition: opacity 0.3s ease;
 }
 
 .interim-text {
@@ -39,4 +46,42 @@
     color: #999;
     font-size: 0.8em;
     margin-right: 8px;
+}
+
+.recording-card {
+    transition: transform 0.2s ease;
+}
+
+.recording-card:hover {
+    transform: translateY(-2px);
+}
+
+#timer {
+    font-family: monospace;
+    font-size: 24px;
+    color: #333;
+}
+
+.uk-button {
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+.uk-card {
+    border-radius: 8px;
+}
+
+.uk-navbar-container {
+    background: #fff !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.uk-logo {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #333;
+}
+
+#loadingSpinner {
+    margin: 20px 0;
 }
