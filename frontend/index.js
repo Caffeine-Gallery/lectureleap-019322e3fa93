@@ -28,6 +28,30 @@ class AudioRecorder {
         this.initializeEvents();
     }
 
+    initializeEvents() {
+        if (this.recordBtn) {
+            this.recordBtn.addEventListener('click', () => this.toggleRecording());
+        }
+        if (this.generateStudyGuideBtn) {
+            this.generateStudyGuideBtn.addEventListener('click', () => this.generateStudyGuide());
+        }
+    }
+
+    async toggleRecording() {
+        if (!this.isRecording) {
+            await this.startRecording();
+        } else {
+            await this.stopRecording();
+        }
+    }
+
+    updateTimer() {
+        this.seconds++;
+        const minutes = Math.floor(this.seconds / 60);
+        const remainingSeconds = this.seconds % 60;
+        this.timerDisplay.textContent = `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
+    }
+
     initializeAudioContext() {
         this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
         this.analyser = this.audioContext.createAnalyser();
@@ -49,7 +73,6 @@ class AudioRecorder {
             return;
         }
 
-        // Optimize recognition settings
         this.recognition.continuous = true;
         this.recognition.interimResults = true;
         this.recognition.maxAlternatives = 3;
@@ -65,14 +88,12 @@ class AudioRecorder {
                 const confidence = result[0].confidence;
 
                 if (result.isFinal) {
-                    // Only use results with good confidence
                     if (confidence >= this.confidenceThreshold) {
                         finalTranscript += transcript;
                         if (this.currentTranscriptionId !== null) {
                             await backend.processTranscription(this.currentTranscriptionId, transcript);
                         }
                     } else {
-                        // Try alternative results if primary confidence is low
                         for (let j = 1; j < result.length; j++) {
                             if (result[j].confidence >= this.confidenceThreshold) {
                                 finalTranscript += result[j].transcript;
@@ -88,31 +109,19 @@ class AudioRecorder {
                 }
             }
 
-            this.transcriptionText.innerHTML = 
-                finalTranscript +
-                '<span style="color: #666;">' + interimTranscript + '</span>';
-            this.transcriptionText.scrollTop = this.transcriptionText.scrollHeight;
+            if (this.transcriptionText) {
+                this.transcriptionText.innerHTML = 
+                    finalTranscript +
+                    '<span style="color: #666;">' + interimTranscript + '</span>';
+                this.transcriptionText.scrollTop = this.transcriptionText.scrollHeight;
+            }
         };
 
         this.recognition.onerror = (event) => {
             console.error('Speech recognition error:', event.error);
-            if (event.error === 'no-speech') {
-                UIkit.notification({
-                    message: 'No speech detected. Please speak more clearly.',
-                    status: 'warning'
-                });
-            } else {
-                UIkit.notification({
-                    message: 'Speech recognition error: ' + event.error,
-                    status: 'danger'
-                });
-            }
-        };
-
-        this.recognition.onnomatch = () => {
             UIkit.notification({
-                message: 'Could not recognize speech. Please speak more clearly.',
-                status: 'warning'
+                message: 'Speech recognition error: ' + event.error,
+                status: 'danger'
             });
         };
     }
@@ -130,11 +139,9 @@ class AudioRecorder {
                 }
             });
 
-            // Set up audio processing
             const source = this.audioContext.createMediaStreamSource(stream);
             source.connect(this.analyser);
 
-            // Configure media recorder with high quality settings
             this.mediaRecorder = new MediaRecorder(stream, {
                 mimeType: 'audio/webm;codecs=opus',
                 audioBitsPerSecond: 128000
@@ -149,17 +156,20 @@ class AudioRecorder {
                 }
             };
 
-            // Start monitoring audio levels
             this.startAudioMonitoring();
 
             this.mediaRecorder.start(1000);
             this.recognition.start();
             
             this.isRecording = true;
-            this.transcriptionArea.style.display = 'block';
-            this.recordBtn.textContent = 'Stop Recording';
-            this.recordBtn.classList.remove('uk-button-danger');
-            this.recordBtn.classList.add('uk-button-secondary');
+            if (this.transcriptionArea) {
+                this.transcriptionArea.style.display = 'block';
+            }
+            if (this.recordBtn) {
+                this.recordBtn.textContent = 'Stop Recording';
+                this.recordBtn.classList.remove('uk-button-danger');
+                this.recordBtn.classList.add('uk-button-secondary');
+            }
 
             this.seconds = 0;
             this.timer = setInterval(() => this.updateTimer(), 1000);
@@ -194,7 +204,85 @@ class AudioRecorder {
         checkAudioLevel();
     }
 
-    // ... rest of the class implementation remains the same ...
+    async stopRecording() {
+        return new Promise(async (resolve) => {
+            if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+                this.mediaRecorder.onstop = async () => {
+                    clearInterval(this.timer);
+                    if (this.timerDisplay) {
+                        this.timerDisplay.textContent = '00:00';
+                    }
+                    
+                    try {
+                        await backend.finalizeTranscription(this.currentTranscriptionId);
+                        const finalTranscription = await backend.getLatestTranscription(this.currentTranscriptionId);
+                        if (finalTranscription) {
+                            this.addRecordingToList(this.currentTranscriptionId, finalTranscription);
+                        }
+                    } catch (error) {
+                        console.error('Error finalizing transcription:', error);
+                    }
+                    
+                    if (this.recordBtn) {
+                        this.recordBtn.textContent = 'Start Recording';
+                        this.recordBtn.classList.remove('uk-button-secondary');
+                        this.recordBtn.classList.add('uk-button-danger');
+                    }
+                    
+                    resolve();
+                };
+
+                this.recognition.stop();
+                this.mediaRecorder.stop();
+                this.isRecording = false;
+                this.mediaRecorder.stream.getTracks().forEach(track => track.stop());
+            } else {
+                resolve();
+            }
+        });
+    }
+
+    addRecordingToList(recordingId, transcription) {
+        if (!this.recordingsList) return;
+
+        const recordingElement = document.createElement('div');
+        recordingElement.innerHTML = `
+            <div class="uk-card uk-card-default uk-card-body">
+                <h4 class="uk-card-title">Recording ${recordingId}</h4>
+                <p class="uk-text-truncate">${transcription.substring(0, 100)}...</p>
+                <button class="uk-button uk-button-primary uk-button-small" 
+                    onclick="viewTranscription('${recordingId}')">
+                    View Transcription
+                </button>
+            </div>
+        `;
+        const grid = this.recordingsList.querySelector('.uk-grid');
+        if (grid) {
+            grid.appendChild(recordingElement);
+        }
+    }
+
+    async generateStudyGuide() {
+        if (!this.loadingSpinner || !this.transcriptionText || !this.studyGuideArea || !this.studyGuideText) return;
+
+        this.loadingSpinner.hidden = false;
+        try {
+            const transcription = this.transcriptionText.textContent;
+            const studyGuide = await backend.generateStudyGuide(transcription);
+            
+            this.studyGuideArea.style.display = 'block';
+            this.studyGuideText.innerHTML = studyGuide.replace(/\n/g, '<br>');
+            
+        } catch (error) {
+            console.error('Error generating study guide:', error);
+            UIkit.notification({
+                message: 'Error generating study guide. Please try again.',
+                status: 'danger'
+            });
+        } finally {
+            this.loadingSpinner.hidden = true;
+        }
+    }
 }
 
 window.addEventListener('load', () => {
